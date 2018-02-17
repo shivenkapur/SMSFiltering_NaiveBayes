@@ -1,0 +1,61 @@
+---
+title: "SMSSpam"
+output: html_document
+---
+```{r}
+# Data Processing
+data <- read.table("C:\\Users\\PC2\\Downloads\\SMSSpamCollection.txt",sep = "\t", quote = "")
+data$V2 <- as.character(data$V2)
+str(data)
+table(data$V1)
+prop.table(table(data$V1))
+
+library(tm)
+
+data.corpus <- VCorpus(VectorSource(data$V2)) #Volatile Corpus containing SMS as text documents
+data.corpus
+lapply(data.corpus[1:5],as.character)
+```
+
+```{r}
+#Cleaning up the data
+
+clean.data.corpus <- tm_map(data.corpus, content_transformer(tolower)) #converting text to lower case
+clean.data.corpus <- tm_map(clean.data.corpus, removeWords, stopwords())
+clean.data.corpus <- tm_map(clean.data.corpus, removePunctuation)
+clean.data.corpus <- tm_map(clean.data.corpus, removeNumbers)
+clean.data.corpus <- tm_map(clean.data.corpus, stripWhitespace)
+
+install.packages("SnowballC")
+library(SnowballC)
+clean.data.corpus <- tm_map(clean.data.corpus, stemDocument)
+
+dtm.data.corpus <- DocumentTermMatrix(data.corpus, control = list(tolower = TRUE, stopwords = TRUE, removePunctuation = TRUE, removeNumbers = TRUE, stripWhitespace = TRUE))
+```
+
+```{r}
+#Creatig training and testing matrices
+dtm.train <- dtm.data.corpus[1:4000,]
+dtm.test <- dtm.data.corpus[4001:nrow(data),]
+
+labels.train <- data$V1[1:4000]
+labels.test <- data$V1[4001:nrow(data)]
+freqterms <- findFreqTerms(dtm.train, 10)
+
+dtm.train <- dtm.train[,freqterms]
+dtm.test <- dtm.test[,freqterms]
+
+func <- function(x){x <- ifelse(x>0,"Yes","No")}
+dtm.train <- apply(dtm.train, MARGIN = 2, func)
+dtm.test <- apply(dtm.test, MARGIN = 2, func)
+```
+
+```{r}
+#Training the model
+install.packages("e1071")
+library(e1071)
+model <- naiveBayes(dtm.train, labels.train, laplace = 1)
+prediction <- predict(model, dtm.test)
+CrossTable(x = prediction,y =labels.test)
+#98.1% Accurate
+```
